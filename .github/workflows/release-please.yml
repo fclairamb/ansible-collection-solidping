@@ -41,7 +41,7 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Pre-create the labels release-please relies on to track its own PRs:
       # if the Labels API hiccups while it runs, it loses track of its PR.
@@ -83,7 +83,7 @@ jobs:
     env:
       TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
       - uses: actions/setup-python@v5
