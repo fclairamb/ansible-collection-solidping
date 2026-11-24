@@ -68,7 +68,7 @@ jobs:
           path: ansible_collections/fclairamb/solidping
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.15"
       - run: pip install "ansible-core~=${{ matrix.ansible }}.0"
       - name: Wait for SolidPing
         run: |
@@ -101,7 +101,7 @@ jobs:
           path: ansible_collections/fclairamb/solidping
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.15"
       - run: pip install "ansible-core~=2.22.0" molecule "molecule-plugins[docker]" docker
       - run: ansible-galaxy collection install -r ansible_collections/fclairamb/solidping/roles/server/molecule/default/requirements.yml
       - name: molecule test
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.15"
       - run: pip install "ansible-core~=2.22.0"
       - run: ansible-galaxy collection build
       - name: The archive holds no test or CI file
