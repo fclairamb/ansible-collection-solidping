@@ -1,0 +1,92 @@
+---
+- name: Notification channel module
+  module_defaults:
+    group/fclairamb.solidping.solidping:
+      url: "{{ solidping_url }}"
+      org: "{{ solidping_org }}"
+      token: "{{ solidping_token }}"
+  vars:
+    channel_name: "{{ solidping_prefix }} hook"
+  block:
+    - name: Create (check mode)
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        type: webhook
+        settings:
+          url: https://hooks.acme.com/a
+      check_mode: true
+      register: r
+    - name: Create
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        type: webhook
+        settings:
+          url: https://hooks.acme.com/a
+      register: r2
+    - name: Create again
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        type: webhook
+        settings:
+          url: https://hooks.acme.com/a
+      register: r3
+    - name: Assert creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r2 is changed
+          - r3 is not changed
+          - r2.notification_channel.settings.url == 'https://hooks.acme.com/a'
+
+    - name: Update
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        settings:
+          url: https://hooks.acme.com/b
+        enabled: false
+      register: r
+    - name: Update again
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        settings:
+          url: https://hooks.acme.com/b
+        enabled: false
+      register: r2
+    - name: Assert the update is idempotent
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r2 is not changed
+          - not r.notification_channel.enabled
+
+    - name: Read it
+      fclairamb.solidping.notification_channel_info:
+        name: "{{ channel_name }}"
+      register: r
+    - name: Assert it reads back
+      ansible.builtin.assert:
+        that:
+          - r.notification_channels | length == 1
+          - r.notification_channels[0].settings.url == 'https://hooks.acme.com/b'
+
+    - name: Delete
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        state: absent
+      register: r
+    - name: Delete again
+      fclairamb.solidping.notification_channel:
+        name: "{{ channel_name }}"
+        state: absent
+      register: r2
+    - name: Assert deletion is idempotent
+      ansible.builtin.assert:
+        that: [r is changed, r2 is not changed]
+  always:
+    - name: Clean up
+      fclairamb.solidping.notification_channel:
+        url: "{{ solidping_url }}"
+        org: "{{ solidping_org }}"
+        token: "{{ solidping_token }}"
+        name: "{{ solidping_prefix }} hook"
+        state: absent

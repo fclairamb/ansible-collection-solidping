@@ -1,0 +1,110 @@
+# release-please keeps a `chore(release): vX.Y.Z` pull request up to date with
+# the changelog of what was merged since the last release, and bumps the
+# version in galaxy.yml (the `x-release-please-version` marker). Merging that
+# PR tags the version and creates the GitHub release; the `galaxy` job then
+# builds the collection, attaches the archive to the release and publishes it
+# to Ansible Galaxy.
+#
+# Secrets (see README.md, "Releasing"):
+#   CI_PAT           token release-please acts with, so that the release PR
+#                    gets a CI run and its merge triggers this workflow again.
+#                    Without it the workflow falls back to GITHUB_TOKEN: the
+#                    release PR then needs a manual run of the Tests workflow.
+#   GALAXY_API_KEY   API key of the `fclairamb` Galaxy namespace. Without it
+#                    the archive is still attached to the release, and the
+#                    publish step fails with an explicit error.
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  # Re-publishes an existing release (after adding GALAXY_API_KEY, for instance).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish, e.g. v0.1.0
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pre-create the labels release-please relies on to track its own PRs:
+      # if the Labels API hiccups while it runs, it loses track of its PR.
+      - name: Ensure release-please labels exist
+        env:
+          GH_TOKEN: ${{ secrets.CI_PAT || github.token }}
+        run: |
+          gh label create "autorelease: pending" --color ededed --force --repo ${{ github.repository }}
+          gh label create "autorelease: tagged"  --color ededed --force --repo ${{ github.repository }}
+
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.CI_PAT || github.token }}
+
+      # Drift detector: HEAD is a merged release commit but no GitHub release
+      # exists, so release-please lost track of its own PR. Fail loudly.
+      - name: Detect release drift
+        if: ${{ always() && !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          msg=$(git log -1 --pretty=%s)
+          if [[ "$msg" =~ ^chore\(release\):\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            want="v${BASH_REMATCH[1]}"
+            if ! gh api "repos/${{ github.repository }}/releases/tags/$want" >/dev/null 2>&1; then
+              echo "::error::HEAD is '$msg' but release $want was not created by release-please." \
+                   "Tag and release must be created manually (gh release create $want --target <merge-sha>)."
+              exit 1
+            fi
+            echo "Release drift check: $want tagged and released ✓"
+          fi
+
+  galaxy:
+    needs: release-please
+    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ansible-core~=2.22.0"
+      - name: Check that galaxy.yml carries the version of the tag
+        run: |
+          version=$(python -c 'import yaml; print(yaml.safe_load(open("galaxy.yml"))["version"])')
+          [ "v$version" = "$TAG" ] || { echo "::error::galaxy.yml says $version, the tag is $TAG"; exit 1; }
+      - run: ansible-galaxy collection build
+      - name: Attach the archive to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" fclairamb-solidping-*.tar.gz --clobber
+      - name: Publish to Ansible Galaxy
+        env:
+          GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
+        run: |
+          if [ -z "$GALAXY_API_KEY" ]; then
+            echo "::error::GALAXY_API_KEY is not set: the archive is on the release, not on Galaxy."
+            exit 1
+          fi
+          ansible-galaxy collection publish fclairamb-solidping-*.tar.gz --api-key "$GALAXY_API_KEY"

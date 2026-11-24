@@ -1,0 +1,201 @@
+---
+- name: Status page and section modules
+  module_defaults:
+    group/fclairamb.solidping.solidping:
+      url: "{{ solidping_url }}"
+      org: "{{ solidping_org }}"
+      token: "{{ solidping_token }}"
+  vars:
+    page: "{{ solidping_prefix }}-page"
+  block:
+    - name: A check to show
+      fclairamb.solidping.check:
+        slug: "{{ solidping_prefix }}-shown"
+        type: http
+        config:
+          url: https://www.acme.com
+        labels:
+          tier: "{{ solidping_prefix }}"
+
+    - name: Create the page (check mode)
+      fclairamb.solidping.status_page:
+        slug: "{{ page }}"
+        name: Acme status
+        history_period: 30d
+      check_mode: true
+      register: r
+    - name: Create the page
+      fclairamb.solidping.status_page:
+        slug: "{{ page }}"
+        name: Acme status
+        history_period: 30d
+      register: r2
+    - name: Create the page again
+      fclairamb.solidping.status_page:
+        slug: "{{ page }}"
+        name: Acme status
+        history_period: 30d
+      register: r3
+    - name: Assert page creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r2 is changed
+          - r3 is not changed
+          - r2.status_page.historyPeriod == '30d'
+
+    - name: Update the page
+      fclairamb.solidping.status_page:
+        slug: "{{ page }}"
+        description: Live status
+        show_response_time: false
+        enabled: false
+      register: r
+    - name: Update the page again
+      fclairamb.solidping.status_page:
+        slug: "{{ page }}"
+        description: Live status
+        show_response_time: false
+        enabled: false
+      register: r2
+    - name: Assert the page update is idempotent
+      ansible.builtin.assert:
+        that: [r is changed, r2 is not changed]
+
+    - name: Section with a selector
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        name: Production
+        selector:
+          labels:
+            tier: "{{ solidping_prefix }}"
+      register: r
+    - name: Section with a selector again
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        name: Production
+        selector:
+          labels:
+            tier: "{{ solidping_prefix }}"
+      register: r2
+    - name: Assert the selector section is idempotent
+      ansible.builtin.assert:
+        that: [r is changed, r2 is not changed]
+
+    - name: Curated section (check mode)
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        name: Curated
+        resources:
+          - check: "{{ solidping_prefix }}-shown"
+            public_name: Website
+      check_mode: true
+      register: r
+    - name: Curated section
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        name: Curated
+        resources:
+          - check: "{{ solidping_prefix }}-shown"
+            public_name: Website
+      register: r2
+    - name: Curated section again
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        name: Curated
+        resources:
+          - check: "{{ solidping_prefix }}-shown"
+            public_name: Website
+      register: r3
+    - name: Assert the curated section is idempotent
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r2 is changed
+          - r3 is not changed
+          - r2.status_page_section.resources | length == 1
+          - r2.status_page_section.resources[0].publicName == 'Website'
+
+    - name: Rename the component
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        resources:
+          - check: "{{ solidping_prefix }}-shown"
+            public_name: Site
+            explanation: The public website
+      register: r
+    - name: Empty the section
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        resources: []
+      register: r2
+    - name: Empty the section again
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        resources: []
+      register: r3
+    - name: Assert component changes
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r.status_page_section.resources[0].publicName == 'Site'
+          - r2 is changed
+          - r2.status_page_section.resources | length == 0
+          - r3 is not changed
+
+    - name: Read the sections
+      fclairamb.solidping.status_page_section_info:
+        status_page: "{{ page }}"
+      register: r
+    - name: Assert both sections read back
+      ansible.builtin.assert:
+        that:
+          - "'production' in (r.status_page_sections | map(attribute='slug'))"
+          - "'curated' in (r.status_page_sections | map(attribute='slug'))"
+
+    - name: Delete a section
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        state: absent
+      register: r
+    - name: Delete it again
+      fclairamb.solidping.status_page_section:
+        status_page: "{{ page }}"
+        slug: curated
+        state: absent
+      register: r2
+    - name: Assert section deletion is idempotent
+      ansible.builtin.assert:
+        that: [r is changed, r2 is not changed]
+
+    - name: Read the page
+      fclairamb.solidping.status_page_info:
+        slug: "{{ page }}"
+      register: r
+    - name: Assert the page reads back
+      ansible.builtin.assert:
+        that:
+          - r.status_pages | length == 1
+          - r.status_pages[0].description == 'Live status'
+  always:
+    - name: Delete the page
+      fclairamb.solidping.status_page:
+        url: "{{ solidping_url }}"
+        org: "{{ solidping_org }}"
+        token: "{{ solidping_token }}"
+        slug: "{{ solidping_prefix }}-page"
+        state: absent
+    - name: Delete the check
+      fclairamb.solidping.check:
+        url: "{{ solidping_url }}"
+        org: "{{ solidping_org }}"
+        token: "{{ solidping_token }}"
+        slug: "{{ solidping_prefix }}-shown"
+        state: absent

@@ -1,0 +1,15 @@
+---
+- name: Find the latest release
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/fclairamb/solidping/releases/latest
+    headers:
+      Accept: application/vnd.github+json
+    use_netrc: false
+  register: _solidping_latest
+  check_mode: false
+  when: solidping_version == 'latest'
+
+- name: Set the version to install
+  ansible.builtin.set_fact:
+    _solidping_version: >-
+      {{ (_solidping_latest.json.tag_name if solidping_version == 'latest' else solidping_version) | regex_replace('^v', '') }}

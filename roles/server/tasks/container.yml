@@ -1,0 +1,16 @@
+---
+- name: Run the SolidPing container
+  community.docker.docker_container:
+    name: "{{ solidping_container_name }}"
+    image: "{{ solidping_container_image }}:{{ _solidping_version }}"
+    env: "{{ dict(solidping_env.keys() | zip(solidping_env.values() | map('string'))) }}"
+    volumes:
+      - "{{ solidping_container_volume }}:/data"
+    published_ports: "{{ solidping_container_ports }}"
+    networks: "{{ solidping_container_networks or omit }}"
+    labels: "{{ solidping_container_labels or omit }}"
+    restart_policy: "{{ solidping_container_restart_policy }}"
+    state: "{{ solidping_service_state }}"
+    comparisons:
+      env: strict
+  no_log: "{{ solidping_env | length > 0 }}"

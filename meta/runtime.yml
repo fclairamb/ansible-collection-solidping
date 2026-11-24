@@ -1,0 +1,14 @@
+---
+requires_ansible: ">=2.17.0"
+action_groups:
+  solidping:
+    - check
+    - check_info
+    - notification_channel
+    - notification_channel_info
+    - status_page
+    - status_page_info
+    - status_page_section
+    - status_page_section_info
+    - maintenance_window
+    - maintenance_window_info

@@ -1,0 +1,168 @@
+---
+- name: Check module
+  module_defaults:
+    group/fclairamb.solidping.solidping:
+      url: "{{ solidping_url }}"
+      org: "{{ solidping_org }}"
+      token: "{{ solidping_token }}"
+  vars:
+    slug: "{{ solidping_prefix }}-website"
+    spec: &spec
+      slug: "{{ solidping_prefix }}-website"
+      name: Website
+      type: http
+      description: The website
+      config:
+        url: https://www.acme.com
+      period: "00:02:00"
+      labels:
+        env: prod
+  block:
+    - name: Create (check mode)
+      fclairamb.solidping.check: *spec
+      check_mode: true
+      register: r
+    - name: Assert a creation is predicted
+      ansible.builtin.assert:
+        that: [r is changed]
+    - name: Nothing was created in check mode
+      fclairamb.solidping.check_info:
+        slug: "{{ slug }}"
+      register: r
+    - name: Assert nothing was created
+      ansible.builtin.assert:
+        that: [r.checks | length == 0]
+
+    - name: Create
+      fclairamb.solidping.check: *spec
+      register: r
+    - name: Assert it was created
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r.check.slug == slug
+          - r.check.labels.env == 'prod'
+          - r.check.period == '00:02:00'
+
+    - name: Create again
+      fclairamb.solidping.check: *spec
+      register: r
+    - name: Assert it is idempotent
+      ansible.builtin.assert:
+        that: [r is not changed]
+
+    - name: Update (check mode)
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        config:
+          url: https://www.acme.com/health
+        labels: {}
+        description: ""
+      check_mode: true
+      diff: true
+      register: r
+    - name: Assert an update is predicted
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r.diff.after.config.url == 'https://www.acme.com/health'
+
+    - name: Update
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        config:
+          url: https://www.acme.com/health
+        labels: {}
+        description: ""
+      register: r
+    - name: Assert it was updated
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r.check.config.url == 'https://www.acme.com/health'
+          - not (r.check.labels | default({}))
+          - not (r.check.description | default(''))
+
+    - name: Update again
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        config:
+          url: https://www.acme.com/health
+        labels: {}
+        description: ""
+      register: r
+    - name: Assert the update is idempotent
+      ansible.builtin.assert:
+        that: [r is not changed]
+
+    - name: Secrets are sent on creation only by default
+      fclairamb.solidping.check:
+        slug: "{{ slug }}-auth"
+        type: http
+        config:
+          url: https://www.acme.com/private
+        config_sensitive:
+          password: s3cret
+      register: r
+    - name: Write the same secret again
+      fclairamb.solidping.check:
+        slug: "{{ slug }}-auth"
+        config:
+          url: https://www.acme.com/private
+        config_sensitive:
+          password: s3cret
+      register: r2
+    - name: Assert secrets do not make the task change
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r2 is not changed
+
+    - name: Changing the type fails
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        type: tcp
+      register: r
+      ignore_errors: true
+    - name: Assert the type change was refused
+      ansible.builtin.assert:
+        that: [r is failed]
+
+    - name: Read every check
+      fclairamb.solidping.check_info:
+        labels: {}
+      register: r
+    - name: Assert the list contains ours
+      ansible.builtin.assert:
+        that: [slug in (r.checks | map(attribute='slug'))]
+
+    - name: Delete (check mode)
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        state: absent
+      check_mode: true
+      register: r
+    - name: Delete
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        state: absent
+      register: r2
+    - name: Delete again
+      fclairamb.solidping.check:
+        slug: "{{ slug }}"
+        state: absent
+      register: r3
+    - name: Assert deletion is idempotent
+      ansible.builtin.assert:
+        that: [r is changed, r2 is changed, r3 is not changed]
+  always:
+    - name: Clean up
+      fclairamb.solidping.check:
+        url: "{{ solidping_url }}"
+        org: "{{ solidping_org }}"
+        token: "{{ solidping_token }}"
+        slug: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ solidping_prefix }}-website"
+        - "{{ solidping_prefix }}-website-auth"

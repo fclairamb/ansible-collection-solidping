@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+*.tar.gz
+tests/output/
+tests/integration/integration_config.yml
+.pytest_cache/
+.cache/

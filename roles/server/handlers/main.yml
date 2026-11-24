@@ -1,0 +1,8 @@
+---
+- name: Restart solidping
+  ansible.builtin.systemd_service:
+    name: "{{ solidping_service_name }}"
+    state: restarted
+  when:
+    - solidping_install_method == 'binary'
+    - solidping_service_state == 'started'

@@ -1,0 +1,37 @@
+---
+namespace: fclairamb
+name: solidping
+version: 0.1.0 # x-release-please-version
+readme: README.md
+authors:
+  - Florent Clairambault (@fclairamb)
+description: Install a SolidPing server and manage its checks, notification channels, status pages and maintenance windows.
+license:
+  - GPL-3.0-or-later
+license_file: ""
+tags:
+  - monitoring
+  - uptime
+  - statuspage
+  - solidping
+  - infrastructure
+dependencies: {}
+repository: https://github.com/fclairamb/ansible-collection-solidping
+documentation: https://github.com/fclairamb/ansible-collection-solidping#readme
+homepage: https://www.solidping.io
+issues: https://github.com/fclairamb/ansible-collection-solidping/issues
+build_ignore:
+  - .venv
+  - .github
+  - .gitignore
+  - specs
+  - tests/output
+  - tests/integration/integration_config.yml
+  - roles/server/molecule
+  - .cache
+  - "*.tar.gz"
+  - AGENTS.md
+  - CLAUDE.md
+  - Makefile
+  - release-please-config.json
+  - .release-please-manifest.json

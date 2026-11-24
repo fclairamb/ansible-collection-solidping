@@ -1,0 +1,37 @@
+---
+# How to run the server: `binary` (release binary + systemd service) or
+# `container` (the published image, through community.docker).
+solidping_install_method: binary
+
+# Version to install, without the `v` (`0.54.1`), or `latest`.
+solidping_version: latest
+
+# SP_* environment variables of the server, written to config.env (binary)
+# or passed to the container. Keys are the variable names.
+#   solidping_env:
+#     SP_ADMIN_EMAIL: admin@acme.com
+#     SP_DB_TYPE: postgres
+#     SP_DB_URL: "{{ vault_solidping_db_url }}"
+solidping_env: {}
+
+# Optional content of config.yml (binary install), as a dict. Left alone when empty.
+solidping_config: {}
+
+# Binary install.
+solidping_service_name: solidping
+solidping_bin_path: /usr/local/bin/solidping
+solidping_data_dir: /var/lib/solidping
+solidping_service_enabled: true
+solidping_service_state: started
+solidping_download_base_url: https://github.com/fclairamb/solidping/releases
+solidping_download_dir: /var/cache/solidping
+
+# Container install.
+solidping_container_name: solidping
+solidping_container_image: ghcr.io/fclairamb/solidping
+solidping_container_volume: solidping-data
+solidping_container_ports:
+  - "4000:4000"
+solidping_container_restart_policy: unless-stopped
+solidping_container_networks: []
+solidping_container_labels: {}

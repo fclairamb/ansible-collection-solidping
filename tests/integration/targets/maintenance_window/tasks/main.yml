@@ -1,0 +1,117 @@
+---
+- name: Maintenance window module
+  module_defaults:
+    group/fclairamb.solidping.solidping:
+      url: "{{ solidping_url }}"
+      org: "{{ solidping_org }}"
+      token: "{{ solidping_token }}"
+  vars:
+    title: "{{ solidping_prefix }} nightly"
+  block:
+    - name: A check under maintenance
+      fclairamb.solidping.check:
+        slug: "{{ solidping_prefix }}-db"
+        type: tcp
+        config:
+          host: db.acme.com
+          port: 5432
+
+    - name: Create (check mode)
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        start_at: "2030-12-01T02:00:00+01:00"
+        end_at: "2030-12-01T03:00:00+01:00"
+        recurrence: daily
+        checks: ["{{ solidping_prefix }}-db"]
+      check_mode: true
+      register: r
+    - name: Create
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        start_at: "2030-12-01T02:00:00+01:00"
+        end_at: "2030-12-01T03:00:00+01:00"
+        recurrence: daily
+        checks: ["{{ solidping_prefix }}-db"]
+      register: r2
+    - name: Create again (the server answers the times in UTC)
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        start_at: "2030-12-01T02:00:00+01:00"
+        end_at: "2030-12-01T03:00:00+01:00"
+        recurrence: daily
+        checks: ["{{ solidping_prefix }}-db"]
+      register: r3
+    - name: Assert creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r2 is changed
+          - r3 is not changed
+          - r2.maintenance_window.checks | length == 1
+
+    - name: Update
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        description: Backups
+        end_at: "2030-12-01T02:30:00Z"
+        checks: []
+      register: r
+    - name: Update again
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        description: Backups
+        end_at: "2030-12-01T02:30:00Z"
+        checks: []
+      register: r2
+    - name: Clear the description
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        description: ""
+      register: r3
+    - name: Assert updates
+      ansible.builtin.assert:
+        that:
+          - r is changed
+          - r.maintenance_window.checks | length == 0
+          - r2 is not changed
+          - r3 is changed
+          - not (r3.maintenance_window.description | default(''))
+
+    - name: Read it
+      fclairamb.solidping.maintenance_window_info:
+        title: "{{ title }}"
+      register: r
+    - name: Assert it reads back
+      ansible.builtin.assert:
+        that:
+          - r.maintenance_windows | length == 1
+          - r.maintenance_windows[0].recurrence == 'daily'
+
+    - name: Delete
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        state: absent
+      register: r
+    - name: Delete again
+      fclairamb.solidping.maintenance_window:
+        title: "{{ title }}"
+        state: absent
+      register: r2
+    - name: Assert deletion is idempotent
+      ansible.builtin.assert:
+        that: [r is changed, r2 is not changed]
+  always:
+    - name: Delete the window
+      fclairamb.solidping.maintenance_window:
+        url: "{{ solidping_url }}"
+        org: "{{ solidping_org }}"
+        token: "{{ solidping_token }}"
+        title: "{{ solidping_prefix }} nightly"
+        state: absent
+    - name: Delete the check
+      fclairamb.solidping.check:
+        url: "{{ solidping_url }}"
+        org: "{{ solidping_org }}"
+        token: "{{ solidping_token }}"
+        slug: "{{ solidping_prefix }}-db"
+        state: absent

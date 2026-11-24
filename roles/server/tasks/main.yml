@@ -1,0 +1,11 @@
+---
+- name: Resolve the version to install
+  ansible.builtin.include_tasks: version.yml
+
+- name: Install the binary and its service
+  ansible.builtin.include_tasks: binary.yml
+  when: solidping_install_method == 'binary'
+
+- name: Run the container
+  ansible.builtin.include_tasks: container.yml
+  when: solidping_install_method == 'container'

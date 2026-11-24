@@ -1,0 +1,141 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Lets a run be started by hand on a branch whose push did not trigger one
+  # (a release PR opened without CI_PAT).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanity:
+    name: Sanity (${{ matrix.ansible }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible: [stable-2.17, stable-2.18, stable-2.19, stable-2.20, stable-2.21, stable-2.22]
+    steps:
+      - uses: ansible-community/ansible-test-gh-action@release/v1
+        with:
+          ansible-core-version: ${{ matrix.ansible }}
+          testing-type: sanity
+
+  units:
+    name: Units (${{ matrix.ansible }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible: [stable-2.17, stable-2.22]
+    steps:
+      - uses: ansible-community/ansible-test-gh-action@release/v1
+        with:
+          ansible-core-version: ${{ matrix.ansible }}
+          testing-type: units
+
+  # Every module against a real server: the published image in test mode
+  # (SQLite and the fixed test@test.com account).
+  integration:
+    name: Integration (${{ matrix.ansible }}, SolidPing ${{ matrix.solidping }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible: ["2.17", "2.22"]
+        solidping: [latest]
+    services:
+      solidping:
+        image: ghcr.io/fclairamb/solidping:${{ matrix.solidping }}
+        env:
+          SP_RUNMODE: test
+        ports:
+          - 4000:4000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ansible_collections/fclairamb/solidping
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ansible-core~=${{ matrix.ansible }}.0"
+      - name: Wait for SolidPing
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:4000/api/mgmt/version && exit 0
+            sleep 2
+          done
+          echo "::error::SolidPing did not start" && exit 1
+      - name: Run the integration targets
+        working-directory: ansible_collections/fclairamb/solidping
+        run: |
+          cp tests/integration/integration_config.yml.template tests/integration/integration_config.yml
+          ansible-test integration --local --python 3.12 --color -v
+
+  # The server role in a systemd container (systemd as PID 1).
+  molecule:
+    name: Molecule (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - geerlingguy/docker-debian12-ansible:latest
+          - geerlingguy/docker-ubuntu2404-ansible:latest
+          - geerlingguy/docker-rockylinux9-ansible:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ansible_collections/fclairamb/solidping
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ansible-core~=2.22.0" molecule "molecule-plugins[docker]" docker
+      - run: ansible-galaxy collection install -r ansible_collections/fclairamb/solidping/roles/server/molecule/default/requirements.yml
+      - name: molecule test
+        working-directory: ansible_collections/fclairamb/solidping/roles/server
+        env:
+          MOLECULE_IMAGE: ${{ matrix.image }}
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+        run: molecule test
+
+  build:
+    name: Galaxy build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ansible-core~=2.22.0"
+      - run: ansible-galaxy collection build
+      - name: The archive holds no test or CI file
+        run: |
+          tar -tzf fclairamb-solidping-*.tar.gz | tee files.txt
+          ! grep -E '^(\.github|specs|\.venv)/|AGENTS.md|molecule/' files.txt
+
+  # Single required status check of the `main` ruleset: green only when every job above is.
+  ci:
+    name: CI
+    if: always()
+    needs: [sanity, units, integration, molecule, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job must have succeeded
+        run: |
+          echo '${{ toJSON(needs) }}'
+          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "false" ]

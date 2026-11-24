@@ -1,0 +1,13 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    solidping_version: "{{ lookup('ansible.builtin.env', 'SOLIDPING_VERSION', default='latest') }}"
+    solidping_env:
+      SP_ADMIN_EMAIL: admin@acme.com
+      SP_SERVER_LISTEN: ":4000"
+  tasks:
+    - name: Install SolidPing
+      ansible.builtin.include_role:
+        name: fclairamb.solidping.server

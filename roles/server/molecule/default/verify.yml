@@ -1,0 +1,30 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: The service is running
+      ansible.builtin.command: systemctl is-active solidping
+      changed_when: false
+
+    - name: The server answers
+      ansible.builtin.uri:
+        url: http://localhost:4000/api/mgmt/version
+        use_netrc: false
+      register: version
+      retries: 30
+      delay: 2
+      until: version.status == 200
+
+    - name: Read config.env
+      ansible.builtin.stat:
+        path: /var/lib/solidping/config.env
+      register: env_file
+
+    - name: Check config.env
+      ansible.builtin.assert:
+        that:
+          - env_file.stat.exists
+          - env_file.stat.pw_name == 'solidping'
+          - env_file.stat.mode == '0600'

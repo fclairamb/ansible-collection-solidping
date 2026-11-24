@@ -1,0 +1,6 @@
+---
+# Copied to integration_config.yml by `make integration` and by CI.
+solidping_url: http://localhost:4000
+solidping_org: test
+solidping_email: test@test.com
+solidping_password: test

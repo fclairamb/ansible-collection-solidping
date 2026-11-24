@@ -1,0 +1,86 @@
+---
+argument_specs:
+  main:
+    short_description: Install a SolidPing server
+    description:
+      - Installs the release binary for the architecture of the host (amd64, arm64 or riscv64),
+        registers it with C(solidping service install), writes C(config.env) from O(solidping_env) and
+        keeps the systemd service running.
+      - Or runs the published container image with the same environment.
+    options:
+      solidping_install_method:
+        type: str
+        choices: [binary, container]
+        default: binary
+        description: V(binary) (systemd service) or V(container) (needs the community.docker collection).
+      solidping_version:
+        type: str
+        default: latest
+        description: Version to install without the C(v), for example V(0.54.1), or V(latest).
+      solidping_env:
+        type: dict
+        default: {}
+        description: C(SP_*) environment variables of the server. Keep secrets in Ansible Vault.
+      solidping_config:
+        type: dict
+        default: {}
+        description: Content of C(config.yml) in the data folder (binary install). Not managed when empty.
+      solidping_service_name:
+        type: str
+        default: solidping
+        description: Name of the systemd unit (C(service install --name)).
+      solidping_bin_path:
+        type: path
+        default: /usr/local/bin/solidping
+        description: Where the binary is installed. Its folder must be owned by root and not writable by others.
+      solidping_data_dir:
+        type: path
+        default: /var/lib/solidping
+        description: Data folder of the service (C(service install --dir)).
+      solidping_service_enabled:
+        type: bool
+        default: true
+        description: Start the service at boot.
+      solidping_service_state:
+        type: str
+        choices: [started, stopped]
+        default: started
+        description: State of the service.
+      solidping_download_base_url:
+        type: str
+        default: https://github.com/fclairamb/solidping/releases
+        description: Base of the release downloads (a mirror of the GitHub releases).
+      solidping_download_dir:
+        type: path
+        default: /var/cache/solidping
+        description: Where the downloaded archives are kept.
+      solidping_container_name:
+        type: str
+        default: solidping
+        description: Name of the container.
+      solidping_container_image:
+        type: str
+        default: ghcr.io/fclairamb/solidping
+        description: Image, without the tag.
+      solidping_container_volume:
+        type: str
+        default: solidping-data
+        description: Named volume (or host path) mounted on C(/data).
+      solidping_container_ports:
+        type: list
+        elements: str
+        default: ["4000:4000"]
+        description: Published ports.
+      solidping_container_restart_policy:
+        type: str
+        default: unless-stopped
+        description: Restart policy of the container.
+      solidping_container_networks:
+        type: list
+        elements: dict
+        default: []
+        description: Networks to attach the container to, as C(community.docker.docker_container) takes them.
+      solidping_container_labels:
+        type: dict
+        default: {}
+        description: Labels of the container.

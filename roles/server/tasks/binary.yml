@@ -1,0 +1,114 @@
+---
+- name: Check that the host runs systemd
+  ansible.builtin.assert:
+    that: ansible_facts.service_mgr == 'systemd'
+    fail_msg: >-
+      The binary install registers a systemd service. On another init system, use
+      solidping_install_method=container or run `solidping serve` from it.
+    quiet: true
+
+- name: Map the architecture
+  ansible.builtin.set_fact:
+    _solidping_arch: "{{ _solidping_arches[ansible_facts.architecture] | default('') }}"
+  vars:
+    _solidping_arches:
+      x86_64: amd64
+      amd64: amd64
+      aarch64: arm64
+      arm64: arm64
+      riscv64: riscv64
+
+- name: Check that a binary is published for the architecture
+  ansible.builtin.assert:
+    that: _solidping_arch | length > 0
+    fail_msg: "No SolidPing binary for {{ ansible_facts.architecture }} (amd64, arm64 and riscv64 are published)."
+    quiet: true
+
+- name: Read the installed version
+  ansible.builtin.command: "{{ solidping_bin_path }} --version"
+  register: _solidping_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Decide whether to install
+  ansible.builtin.set_fact:
+    _solidping_needs_install: >-
+      {{ _solidping_installed.rc != 0
+         or (_solidping_installed.stdout | regex_search('[0-9]+\.[0-9]+\.[0-9]+') | default('', true)) != _solidping_version }}
+
+- name: Install the binary
+  when: _solidping_needs_install | bool
+  block:
+    - name: Create the download folder
+      ansible.builtin.file:
+        path: "{{ solidping_download_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download the release, verifying its checksum
+      ansible.builtin.get_url:
+        url: "{{ _solidping_release_url }}/solidping-linux-{{ _solidping_arch }}.gz"
+        dest: "{{ solidping_download_dir }}/solidping-{{ _solidping_version }}-linux-{{ _solidping_arch }}.gz"
+        checksum: "sha256:{{ _solidping_release_url }}/solidping-checksums.txt"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        _solidping_release_url: "{{ solidping_download_base_url }}/download/v{{ _solidping_version }}"
+
+    - name: Decompress and install the binary
+      ansible.builtin.shell:
+        cmd: >-
+          set -e;
+          gunzip -c '{{ solidping_download_dir }}/solidping-{{ _solidping_version }}-linux-{{ _solidping_arch }}.gz'
+          > '{{ solidping_bin_path }}.new';
+          chown root:root '{{ solidping_bin_path }}.new';
+          chmod 0755 '{{ solidping_bin_path }}.new';
+          mv -f '{{ solidping_bin_path }}.new' '{{ solidping_bin_path }}'
+      changed_when: true
+      notify: Restart solidping
+
+- name: Register the systemd service
+  ansible.builtin.command:
+    cmd: >-
+      {{ solidping_bin_path }} service install
+      --name {{ solidping_service_name | quote }}
+      --dir {{ solidping_data_dir | quote }}
+    creates: /etc/systemd/system/{{ solidping_service_name }}.service
+  register: _solidping_unit
+
+- name: Write config.env
+  ansible.builtin.template:
+    src: config.env.j2
+    dest: "{{ solidping_data_dir }}/config.env"
+    owner: solidping
+    group: solidping
+    mode: "0600"
+  no_log: "{{ solidping_env | length > 0 }}"
+  notify: Restart solidping
+  # A fresh host in check mode has neither the folder nor the user yet.
+  when: not (ansible_check_mode and _solidping_unit is changed)
+
+- name: Write config.yml
+  ansible.builtin.copy:
+    content: "{{ solidping_config | to_nice_yaml(indent=2) }}"
+    dest: "{{ solidping_data_dir }}/config.yml"
+    owner: solidping
+    group: solidping
+    mode: "0600"
+  no_log: true
+  notify: Restart solidping
+  when:
+    - solidping_config | length > 0
+    - not (ansible_check_mode and _solidping_unit is changed)
+
+- name: Run the service
+  ansible.builtin.systemd_service:
+    name: "{{ solidping_service_name }}"
+    enabled: "{{ solidping_service_enabled }}"
+    state: "{{ solidping_service_state }}"
+    daemon_reload: "{{ _solidping_unit is changed }}"
+  when: not (ansible_check_mode and _solidping_unit is changed)

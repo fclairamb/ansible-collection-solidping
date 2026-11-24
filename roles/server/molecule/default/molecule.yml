@@ -1,0 +1,33 @@
+---
+# Runs the role in a systemd container (systemd as PID 1), then checks the
+# service answers. `molecule test` from roles/server, with the collection
+# checked out under ansible_collections/fclairamb/solidping.
+driver:
+  name: docker
+platforms:
+  - name: solidping-debian
+    image: "${MOLECULE_IMAGE:-geerlingguy/docker-debian12-ansible:latest}"
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /tmp
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_COLLECTIONS_PATH: "${MOLECULE_PROJECT_DIRECTORY}/../../../../..:${HOME}/.ansible/collections"
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - converge
+    - idempotence
+    - check
+    - verify
+    - destroy

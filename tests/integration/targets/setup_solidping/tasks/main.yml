@@ -1,0 +1,20 @@
+---
+# Logs in with the integration_config.yml account and exposes `solidping_token`.
+- name: Log in to the test server
+  ansible.builtin.uri:
+    url: "{{ solidping_url }}/api/v1/auth/login"
+    method: POST
+    use_netrc: false
+    body_format: json
+    body:
+      org: "{{ solidping_org }}"
+      email: "{{ solidping_email }}"
+      password: "{{ solidping_password }}"
+  register: solidping_login
+  no_log: true
+
+- name: Keep the token
+  ansible.builtin.set_fact:
+    solidping_token: "{{ solidping_login.json.accessToken }}"
+    solidping_prefix: "it-{{ 999999 | random }}"
+  no_log: true
