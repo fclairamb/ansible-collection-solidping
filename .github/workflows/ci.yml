@@ -124,6 +124,11 @@ jobs:
           python-version: "3.13"
       - run: pip install "ansible-core~=2.22.0"
       - run: ansible-galaxy collection build
+      - name: Every role has the README the Galaxy import requires
+        run: |
+          for role in roles/*/; do
+            [ -f "${role}README.md" ] || { echo "::error::${role} has no README.md, Galaxy refuses the import"; exit 1; }
+          done
       - name: The archive holds no test or CI file
         run: |
           tar -tzf fclairamb-solidping-*.tar.gz | tee files.txt
