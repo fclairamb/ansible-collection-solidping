@@ -53,7 +53,7 @@ jobs:
           gh label create "autorelease: tagged"  --color ededed --force --repo ${{ github.repository }}
 
       - id: release
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.CI_PAT || github.token }}
 
