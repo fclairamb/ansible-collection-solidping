@@ -1,16 +1,31 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": [
+    "config:recommended"
+  ],
   "prConcurrentLimit": 1,
   "packageRules": [
     {
       "description": "Minor/patch/digest: automerge with squash",
-      "matchUpdateTypes": ["minor", "patch", "digest"],
-      "addLabels": ["deps"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "addLabels": [
+        "deps"
+      ],
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
       "platformAutomerge": true
+    },
+    {
+      "description": "The Python of each CI job is the one its ansible-core supports (2.17: 3.12 at most, 2.22: 3.13 or later): bump it with ansible-core, by hand.",
+      "matchDepNames": [
+        "python"
+      ],
+      "enabled": false
     }
   ]
 }

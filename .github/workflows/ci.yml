@@ -53,8 +53,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ansible: ["2.17", "2.22"]
-        solidping: [latest]
+        include:
+          - { ansible: "2.17", python: "3.12", solidping: latest }
+          - { ansible: "2.22", python: "3.13", solidping: latest }
     services:
       solidping:
         image: ghcr.io/fclairamb/solidping:${{ matrix.solidping }}
@@ -63,12 +64,12 @@ jobs:
         ports:
           - 4000:4000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: ansible_collections/fclairamb/solidping
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: pip install "ansible-core~=${{ matrix.ansible }}.0"
       - name: Wait for SolidPing
         run: |
@@ -81,7 +82,7 @@ jobs:
         working-directory: ansible_collections/fclairamb/solidping
         run: |
           cp tests/integration/integration_config.yml.template tests/integration/integration_config.yml
-          ansible-test integration --local --python 3.12 --color -v
+          ansible-test integration --local --python ${{ matrix.python }} --color -v
 
   # The server role in a systemd container (systemd as PID 1).
   molecule:
@@ -96,12 +97,12 @@ jobs:
           - geerlingguy/docker-ubuntu2404-ansible:latest
           - geerlingguy/docker-rockylinux9-ansible:latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: ansible_collections/fclairamb/solidping
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - run: pip install "ansible-core~=2.22.0" molecule "molecule-plugins[docker]" docker
       - run: ansible-galaxy collection install -r ansible_collections/fclairamb/solidping/roles/server/molecule/default/requirements.yml
       - name: molecule test
@@ -117,10 +118,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - run: pip install "ansible-core~=2.22.0"
       - run: ansible-galaxy collection build
       - name: The archive holds no test or CI file
