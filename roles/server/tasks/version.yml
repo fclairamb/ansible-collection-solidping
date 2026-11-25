@@ -1,9 +1,13 @@
 ---
+# `latest` is read from the redirect of the releases page, not from the GitHub
+# API: the API allows 60 unauthenticated requests an hour per IP, which shared
+# runners and NATed fleets exhaust (403 "rate limit exceeded" in CI on 2026-11-24).
 - name: Find the latest release
   ansible.builtin.uri:
-    url: https://api.github.com/repos/fclairamb/solidping/releases/latest
-    headers:
-      Accept: application/vnd.github+json
+    url: https://github.com/fclairamb/solidping/releases/latest
+    method: HEAD
+    follow_redirects: none
+    status_code: [301, 302]
     use_netrc: false
   register: _solidping_latest
   check_mode: false
@@ -12,4 +16,4 @@
 - name: Set the version to install
   ansible.builtin.set_fact:
     _solidping_version: >-
-      {{ (_solidping_latest.json.tag_name if solidping_version == 'latest' else solidping_version) | regex_replace('^v', '') }}
+      {{ (_solidping_latest.location | urlsplit('path') | basename if solidping_version == 'latest' else solidping_version) | regex_replace('^v', '') }}
